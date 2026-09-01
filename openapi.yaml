@@ -883,6 +883,9 @@ paths:
                         role: "BOT"
                         text: "I can help you with that. Returns are accepted within 30 days."
                         timestamp: "2026-04-21T10:01:05.000Z"
+                        attachments:
+                          - url: "https://cdn.example.com/uploads/receipt.jpg"
+                            friendlyName: "receipt.jpg"
                     customFields:
                       Bot_Only_Duration__c: "95"
                       Brand__c: "Gap"
