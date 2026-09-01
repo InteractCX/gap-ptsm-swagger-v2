@@ -16,18 +16,12 @@ info:
     arrives, so the NiCE thread is populated live instead of being
     replayed after the fact.
 
-    `ON_BOT_CONVERSATION_COMPLETED` (S01) and `ON_ESCALATION` (S02) keep a
-    `transcript` field, but it only carries trailing message(s) not already
-    streamed individually (this may be the full remaining tail or just the
-    final message; PTSM treats `transcript` entries as idempotent via
-    `messageId`, same as individually streamed messages, so re-sending an
-    already-streamed message here is harmless).
-
     Which of S01 / S02 fires depends only on the resolution outcome — never
     both: bot resolves the conversation → `ON_BOT_CONVERSATION_COMPLETED`;
     bot fails to resolve → `ON_ESCALATION` instead. Both carry the same
-    shape (`customer`, `customFields`, `transcript`) and the same
-    `customFields` set.
+    shape (`customer`, `customFields`) and the same `customFields` set.
+    Neither carries a `transcript` — the bot-phase transcript is already
+    fully covered by the individually streamed `ON_BOT_MESSAGE` events.
 
     ## Scope of this contract
 
@@ -46,6 +40,11 @@ info:
 
     - NiCE `liveAgentThreadId` = Sierra's `botThreadId` value (same for
       existing and guest users).
+    - `customer.email` is used as `authorEndUserIdentity.idOnExternalPlatform`
+      when posting messages to NiCE (the end-user identity key). Blank for
+      guest users.
+    - `customer.id` is used to populate the NiCE customer card field
+      (`CustomFields.CustomerId__c`) — it is not used as the identity key.
 
     ## Flow overview
 
@@ -62,8 +61,9 @@ info:
        - `ON_BOT_CONVERSATION_COMPLETED` (bot resolved it), or
        - `ON_ESCALATION` (bot could not resolve it, live agent needed)
 
-       Both carry `customer` + `customFields` + a `transcript` of any
-       trailing message(s) not already streamed individually.
+       Both carry `customer` + `customFields` only — no `transcript`; the
+       bot-phase transcript is already fully covered by the individually
+       streamed `ON_BOT_MESSAGE` events.
     3. PTSM fires `ON_CONTACT_QUEUED` → Sierra shows queue status
        (`waitTime` included).
     4. PTSM fires `ON_CONNECT_TO_LIVE_AGENT` when an agent connects.
@@ -151,7 +151,9 @@ components:
           description: >
             Customer ID provided by Sierra. Must remain the same for a
             given user across all their interactions/events — not
-            regenerated per event or per session.
+            regenerated per event or per session. Used to populate the
+            NiCE customer card field (`CustomFields.CustomerId__c`) — not
+            used as the NiCE end-user identity key.
           example: "user-4421"
         username:
           type: string
@@ -167,7 +169,10 @@ components:
         email:
           type: string
           format: email
-          description: Blank for guest users.
+          description: >
+            Blank for guest users. Used as
+            `authorEndUserIdentity.idOnExternalPlatform` — the NiCE
+            end-user identity key.
           example: "john.doe@gap.com"
 
     Attachment:
@@ -300,18 +305,14 @@ components:
       title: "S01 — Bot Conversation Completed"
       description: >
         Sent when the bot resolves the conversation without escalation.
-        `transcript` holds only trailing message(s) not already streamed via
-        `ON_BOT_MESSAGE`. `customFields` uses the exact same shape as
-        `ON_ESCALATION`'s.
+        No `transcript` — the bot-phase transcript is already fully
+        covered by the individually streamed `ON_BOT_MESSAGE` events.
+        `customFields` uses the exact same shape as `ON_ESCALATION`'s.
       required:
         - customer
       properties:
         customer:
           $ref: "#/components/schemas/CustomerIdentity"
-        transcript:
-          type: array
-          items:
-            $ref: "#/components/schemas/TranscriptEntry"
         customFields:
           $ref: "#/components/schemas/CustomFields"
 
@@ -323,17 +324,14 @@ components:
         to resolve the conversation and a live agent is needed. Sierra
         provides a skill ID via `customFields.Last_Assigned_Queue__c`.
         `customFields` uses the exact same shape as
-        `ON_BOT_CONVERSATION_COMPLETED`'s. `transcript` holds only trailing
-        message(s) not already streamed via `ON_BOT_MESSAGE`.
+        `ON_BOT_CONVERSATION_COMPLETED`'s. No `transcript` — the bot-phase
+        transcript is already fully covered by the individually streamed
+        `ON_BOT_MESSAGE` events.
       required:
         - customer
       properties:
         customer:
           $ref: "#/components/schemas/CustomerIdentity"
-        transcript:
-          type: array
-          items:
-            $ref: "#/components/schemas/TranscriptEntry"
         customFields:
           $ref: "#/components/schemas/CustomFields"
 
@@ -357,31 +355,20 @@ components:
       description: >
         Sent immediately whenever the user sends a message after
         escalation (live-agent phase). S06 (message with attachment) is
-        merged into this event. `role` is implied by the
-        `ON_USER_MESSAGE` event type.
+        merged into this event. Carries a standard `transcript` array of
+        `TranscriptEntry` objects (same shape used by S01/S02/S08), rather
+        than flat top-level message fields.
       required:
         - customer
-        - messageId
-        - text
-        - timestamp
+        - transcript
       properties:
         customer:
           $ref: "#/components/schemas/CustomerIdentity"
-        messageId:
-          type: string
-          description: Not used by PTSM logic — logging/idempotency only.
-          example: "msg-0192"
-        text:
-          type: string
-          example: "Here is a photo of the damage."
-        timestamp:
-          type: string
-          format: date-time
-          example: "2026-04-21T10:06:10.000Z"
-        attachments:
+        transcript:
           type: array
+          minItems: 1
           items:
-            $ref: "#/components/schemas/Attachment"
+            $ref: "#/components/schemas/TranscriptEntry"
 
     UserTypingPayload:
       type: object
@@ -431,12 +418,12 @@ components:
       type: object
       title: "P01 — On Contact Queued"
       description: >
-        `waitTime` is required alongside `contactId`.
+        `waitTime` is required alongside `liveAgentContactId`.
       required:
-        - contactId
+        - liveAgentContactId
         - waitTime
       properties:
-        contactId:
+        liveAgentContactId:
           type: string
           description: Live agent contact ID for the NiCE contact.
           example: "12345678"
@@ -815,14 +802,6 @@ paths:
                       firstName: "John"
                       lastName: "Doe"
                       email: "john.doe@gap.com"
-                    transcript:
-                      - messageId: "msg-0004"
-                        role: "USER"
-                        text: "Here is a photo of the damage."
-                        timestamp: "2026-04-21T10:06:10.000Z"
-                        attachments:
-                          - url: "https://cdn.example.com/uploads/damage.jpg"
-                            friendlyName: "damage.jpg"
                     customFields:
                       Bot_Only_Duration__c: "150"
                       Brand__c: "Gap"
@@ -872,14 +851,6 @@ paths:
                       firstName: "Jane"
                       lastName: "Smith"
                       email: "jane.smith@gap.com"
-                    transcript:
-                      - messageId: "msg-0102"
-                        role: "BOT"
-                        text: "I can help you with that. Returns are accepted within 30 days."
-                        timestamp: "2026-04-21T10:01:05.000Z"
-                        attachments:
-                          - url: "https://cdn.example.com/uploads/receipt.jpg"
-                            friendlyName: "receipt.jpg"
                     customFields:
                       Bot_Only_Duration__c: "95"
                       Brand__c: "Gap"
@@ -939,12 +910,14 @@ paths:
                       firstName: "John"
                       lastName: "Doe"
                       email: "john.doe@gap.com"
-                    messageId: "msg-0192-cd5e"
-                    text: "Here is a photo of the damage."
-                    timestamp: "2026-04-21T10:17:00.000Z"
-                    attachments:
-                      - url: "https://cdn.example.com/uploads/damage.jpg"
-                        friendlyName: "damage.jpg"
+                    transcript:
+                      - messageId: "msg-0102"
+                        role: "BOT"
+                        text: "I can help you with that. Returns are accepted within 30 days."
+                        timestamp: "2026-04-21T10:01:05.000Z"
+                        attachments:
+                          - url: "https://cdn.example.com/uploads/receipt.jpg"
+                            friendlyName: "receipt.jpg"
 
               on_bot_message:
                 summary: "S08. Bot Message (streaming, new)"
@@ -1076,7 +1049,7 @@ paths:
                   timestamp: "2026-04-21T10:12:03.000Z"
                   botThreadId: "31913901"
                   payload:
-                    contactId: "12345678"
+                    liveAgentContactId: "12345678"
                     queueName: "Customer Support EN"
                     waitTime: 139
 
