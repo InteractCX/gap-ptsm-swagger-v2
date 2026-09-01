@@ -97,6 +97,8 @@ info:
 servers:
   - url: https://ptsm.interactcx.com/v3
     description: Production PTSM service (single PROD environment)
+  - url: https://ptsm.interactcx.com/dev
+    description: Development PTSM service (same host, /dev path prefix)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Security

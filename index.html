@@ -14,11 +14,7 @@
   <script>
     window.onload = () => {
       window.ui = SwaggerUIBundle({
-        urls: [
-          { url: "./openapi.yaml", name: "Production" },
-          { url: "./openapi-dev.yaml", name: "Development" }
-        ],
-        "urls.primaryName": "Production",
+        url: "./openapi.yaml",
         dom_id: "#swagger-ui",
         presets: [
           SwaggerUIBundle.presets.apis,
