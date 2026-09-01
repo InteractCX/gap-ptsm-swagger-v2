@@ -693,10 +693,6 @@ components:
         client_secret:
           type: string
           format: password
-        scope:
-          type: string
-          default: "events:write"
-          example: "events:write"
 
     OAuthTokenResponse:
       type: object
@@ -767,7 +763,6 @@ paths:
               grant_type: "client_credentials"
               client_id: "sierra-gap-prod"
               client_secret: "••••••••••••••••"
-              scope: "events:write"
       responses:
         "200":
           description: Token issued.
@@ -777,10 +772,7 @@ paths:
                 $ref: "#/components/schemas/OAuthTokenResponse"
               example:
                 access_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
-                token_type: "Bearer"
-                expires_in: 3600
-                scope: "events:write"
-        "401":
+        "400":
           description: Invalid client credentials.
           content:
             application/json:
