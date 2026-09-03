@@ -720,11 +720,89 @@ components:
           type: string
           example: "Client authentication failed."
 
+    # ── Health check (draft-inadarei-api-health-check) ──────────────────────
+    HealthCheckResponse:
+      type: object
+      description: >
+        Conforms to the IETF "Health Check Response Format for HTTP APIs"
+        draft (draft-inadarei-api-health-check), media type
+        `application/health+json`.
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: Indicates whether the service status is acceptable or not.
+          enum: [pass, fail, warn]
+          example: "pass"
+        version:
+          type: string
+          description: Public version of the health check response format.
+          example: "1"
+        releaseId:
+          type: string
+          description: Deployed version of the service.
+          example: "3.2.1"
+        serviceId:
+          type: string
+          description: Unique identifier of the service, in the application scope.
+          example: "ptsm-sierra-nice"
+        description:
+          type: string
+          description: Human-friendly description of the service.
+          example: "PTSM Sierra <-> NiCE bridge health"
+        output:
+          type: string
+          description: Raw error output, only present when status is not "pass".
+        notes:
+          type: array
+          description: Array of notes relevant to current state of health.
+          items:
+            type: string
+        checks:
+          type: object
+          description: >
+            Provides detailed health status of additional downstream systems
+            and endpoints, keyed by `{componentName}:{measurementName}`.
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              properties:
+                componentId:
+                  type: string
+                  example: "nice-cxone"
+                componentType:
+                  type: string
+                  example: "component"
+                observedValue:
+                  description: Any type — value observed for this check.
+                observedUnit:
+                  type: string
+                  example: "ms"
+                status:
+                  type: string
+                  enum: [pass, fail, warn]
+                  example: "pass"
+                time:
+                  type: string
+                  format: date-time
+                  example: "2026-09-03T10:00:00.000Z"
+                output:
+                  type: string
+        links:
+          type: object
+          description: Hyperlinks to relevant humans, e.g. an incident page.
+          additionalProperties:
+            type: string
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────────────────────────────────────
 
 tags:
+  - name: Health
+    description: Service health probe.
   - name: Auth
     description: OAuth 2.0 client-credentials token issuance.
   - name: Sierra Events
@@ -733,6 +811,56 @@ tags:
     description: Endpoints hosted **by Sierra** that PTSM calls to deliver events. HMAC-signed.
 
 paths:
+
+  # ── Health ──────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health probe
+      operationId: getHealth
+      security: []
+      description: >
+        Health check endpoint conforming to the IETF "Health Check Response
+        Format for HTTP APIs" draft (draft-inadarei-api-health-check).
+      responses:
+        "200":
+          description: Service is healthy or degraded but serviceable.
+          content:
+            application/health+json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              example:
+                status: "pass"
+                version: "1"
+                releaseId: "3.2.1"
+                serviceId: "ptsm-sierra-nice"
+                description: "PTSM Sierra <-> NiCE bridge health"
+                checks:
+                  "nice:connectivity":
+                    - componentId: "nice-cxone"
+                      componentType: "component"
+                      status: "pass"
+                      time: "2026-09-03T10:00:00.000Z"
+        "503":
+          description: Service is unhealthy.
+          content:
+            application/health+json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              example:
+                status: "fail"
+                version: "1"
+                releaseId: "3.2.1"
+                serviceId: "ptsm-sierra-nice"
+                output: "NiCE CXone connectivity check failed."
+                checks:
+                  "nice:connectivity":
+                    - componentId: "nice-cxone"
+                      componentType: "component"
+                      status: "fail"
+                      time: "2026-09-03T10:00:00.000Z"
+                      output: "Connection timed out after 5000ms."
 
   # ── Auth ────────────────────────────────────────────────────────────────────
 
