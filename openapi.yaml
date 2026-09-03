@@ -33,7 +33,7 @@ info:
     - `ON_VISITOR_INACTIVITY`.
     - `ON_MESSAGE_WITH_ATTACHMENT` (S06) — merged into `ON_USER_MESSAGE` (S05).
     - `ON_MESSAGE_WITH_ATTACHMENT` (P07) — merged into `ON_AGENT_MESSAGE` (P05).
-    - `ON_CASE_UPDATE` only covers `resolved` / `closed` (not open / pending /
+    - `ON_CASE_UPDATE` only covers `RESOLVED` / `CLOSED` (not open / pending /
       escalated).
 
     ## Identity model
@@ -71,7 +71,7 @@ info:
        typing as `ON_USER_TYPING`.
     6. PTSM fires `ON_AGENT_MESSAGE` / `ON_AGENT_TYPING` for agent activity.
     7. If transferred, PTSM fires `ON_TRANSFER`.
-    8. PTSM fires `ON_CASE_UPDATE` (`resolved` or `closed`) → Sierra resumes
+    8. PTSM fires `ON_CASE_UPDATE` (`RESOLVED` or `CLOSED`) → Sierra resumes
        bot mode.
     9. User/Sierra ends the session with `ON_CLOSE_SESSION`.
 
@@ -205,8 +205,8 @@ components:
           example: "msg-0001"
         role:
           type: string
-          enum: [USER, BOT]
-          example: "USER"
+          enum: [CUSTOMER, BOT]
+          example: "CUSTOMER"
         text:
           type: string
           example: "I have a problem with my order."
@@ -345,9 +345,6 @@ components:
           type: string
           enum: [USER, SYSTEM, TIMEOUT]
           example: "USER"
-        reason:
-          type: string
-          example: "User exited the chat window."
 
     UserMessagePayload:
       type: object
@@ -393,7 +390,7 @@ components:
         immediately as it happens, right up until `ON_ESCALATION` or
         `ON_BOT_CONVERSATION_COMPLETED` closes out that phase. `transcript`
         carries the streamed message(s) as `TranscriptEntry` objects, whose
-        `role` is `USER` or `BOT` depending on who sent it — the same entry
+        `role` is `CUSTOMER` or `BOT` depending on who sent it — the same entry
         shape used by S01/S02's trailing `transcript`, so PTSM can
         reconcile a streamed message against a later replay by `messageId`
         + `role` alone. `customer` is included so PTSM has the customer
@@ -445,9 +442,9 @@ components:
         agentId:
           type: string
           example: "18923"
-        agentName:
+        agentFirstName:
           type: string
-          example: "John Smith"
+          example: "John"
 
     TransferPayload:
       type: object
@@ -459,23 +456,23 @@ components:
         newAgentId:
           type: string
           example: "203244"
-        newAgentName:
+        newAgentFirstName:
           type: string
-          example: "Michael Smith"
+          example: "Michael"
 
     CaseUpdatePayload:
       type: object
       title: "P04 — On Case Update"
       description: >
-        Only `resolved` and `closed` are in scope (not open / pending /
+        Only `RESOLVED` and `CLOSED` are in scope (not open / pending /
         escalated). Both cause Sierra to close the session.
       required:
         - newStatus
       properties:
         newStatus:
           type: string
-          enum: [resolved, closed]
-          example: "resolved"
+          enum: [RESOLVED, CLOSED]
+          example: "RESOLVED"
 
     AgentMessagePayload:
       type: object
@@ -553,6 +550,12 @@ components:
             Sierra's conversation ID. Also used directly as the NiCE
             `liveAgentThreadId`.
           example: "31913901"
+        closedBy:
+          type: string
+          description: >
+            Only present on `ON_BOT_CONVERSATION_COMPLETED` (S01).
+          enum: [CUSTOMER, SYSTEM, TIMEOUT]
+          example: "CUSTOMER"
         payload:
           oneOf:
             - $ref: "#/components/schemas/BotConversationCompletedPayload"
@@ -844,6 +847,7 @@ paths:
                   eventType: "ON_BOT_CONVERSATION_COMPLETED"
                   timestamp: "2026-04-21T10:10:00.000Z"
                   botThreadId: "31913902"
+                  closedBy: "CUSTOMER"
                   payload:
                     customer:
                       id: "user-4422"
@@ -935,9 +939,12 @@ paths:
                       email: "john.doe@gap.com"
                     transcript:
                       - messageId: "msg-0001"
-                        role: "USER"
+                        role: "CUSTOMER"
                         text: "My order arrived damaged."
                         timestamp: "2026-04-21T10:05:30.000Z"
+                        attachments:
+                          - url: "https://cdn.example.com/uploads/damaged-item.jpg"
+                            friendlyName: "damaged-item.jpg"
                       - messageId: "msg-0002"
                         role: "BOT"
                         text: "I'm sorry to hear that. Can I get your order number?"
@@ -952,7 +959,6 @@ paths:
                   botThreadId: "31913901"
                   payload:
                     closedBy: "USER"
-                    reason: "User exited the chat window."
 
       responses:
         "202":
@@ -1062,7 +1068,7 @@ paths:
                   botThreadId: "31913901"
                   payload:
                     agentId: "18923"
-                    agentName: "John Smith"
+                    agentFirstName: "John"
 
               on_transfer:
                 summary: "P03. Transfer"
@@ -1073,7 +1079,7 @@ paths:
                   botThreadId: "31913901"
                   payload:
                     newAgentId: "203244"
-                    newAgentName: "Michael Smith"
+                    newAgentFirstName: "Michael"
 
               on_case_update:
                 summary: "P04. Case Update"
@@ -1083,7 +1089,7 @@ paths:
                   timestamp: "2026-04-21T10:20:00.000Z"
                   botThreadId: "31913901"
                   payload:
-                    newStatus: "resolved"
+                    newStatus: "RESOLVED"
 
               on_agent_message:
                 summary: "P05. Agent Message"
