@@ -832,16 +832,6 @@ paths:
                 $ref: "#/components/schemas/HealthCheckResponse"
               example:
                 status: "pass"
-                version: "1"
-                releaseId: "3.2.1"
-                serviceId: "ptsm-sierra-nice"
-                description: "PTSM Sierra <-> NiCE bridge health"
-                checks:
-                  "nice:connectivity":
-                    - componentId: "nice-cxone"
-                      componentType: "component"
-                      status: "pass"
-                      time: "2026-09-03T10:00:00.000Z"
         "503":
           description: Service is unhealthy.
           content:
@@ -850,17 +840,6 @@ paths:
                 $ref: "#/components/schemas/HealthCheckResponse"
               example:
                 status: "fail"
-                version: "1"
-                releaseId: "3.2.1"
-                serviceId: "ptsm-sierra-nice"
-                output: "NiCE CXone connectivity check failed."
-                checks:
-                  "nice:connectivity":
-                    - componentId: "nice-cxone"
-                      componentType: "component"
-                      status: "fail"
-                      time: "2026-09-03T10:00:00.000Z"
-                      output: "Connection timed out after 5000ms."
 
   # ── Auth ────────────────────────────────────────────────────────────────────
 
